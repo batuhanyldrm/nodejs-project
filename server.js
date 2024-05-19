@@ -8,7 +8,7 @@ const port = 3000;
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.send('Node.js Task')
+    res.send('Node.js project')
 })
 
 app.use('/users', userRoutes)
