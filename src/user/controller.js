@@ -18,9 +18,9 @@ const getUser =  (req, res) => {
 }
 
 const addUser =  (req, res) => {
-    const { name, books } = req.body
-    const query = 'INSERT INTO users (name, books) VALUES ($1, $2)';
-    const values = [name, books];
+    const { name } = req.body
+    const query = 'INSERT INTO users (name) VALUES ($1)';
+    const values = [name];
     pool.query(query, values,
     (error, result) => {
         if (error) {
@@ -38,7 +38,7 @@ const borrowBook =  (req, res) => {
 
     const checkUserQuery = 'SELECT 1 FROM users WHERE id = $1';
     const checkBookQuery = 'SELECT 1 FROM books WHERE id = $1';
-    const checkBookHistoryQuery = 'SELECT 1 FROM book_history WHERE book_id = $1';
+    const checkBookHistoryQuery = 'SELECT 1 FROM book_history WHERE status = $1';
     const insertBookHistoryQuery = 'INSERT INTO book_history (book_id, user_id, status) VALUES ($1, $2, $3)';
 
     pool.query(checkUserQuery, [id], (error, result) => {
@@ -51,14 +51,16 @@ const borrowBook =  (req, res) => {
             return res.status(404).send('User not found');
         }
 
-        pool.query(checkBookHistoryQuery, [bookId], (error, result) => {
+        pool.query(checkBookHistoryQuery, [1], (error, result) => {
             if (error) {
                 console.error("Error occurred while checking user:", error);
                 return res.status(500).send('Something Went Wrong');
             }
     
-            if (result.rowCount === 1) {
-                return res.status(404).send('Book already borrowed');
+            for (let i = 0; i < result.rows.length; i++) {
+                if (result.rows[i].status === 1) {
+                    return res.status(404).send('Book already borrowed');
+                }
             }
 
             pool.query(checkBookQuery, [bookId], (error, result) => {
