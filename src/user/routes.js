@@ -7,5 +7,6 @@ router.get('/', controller.getUsers);
 router.post('/', controller.addUser);
 router.get('/:id', controller.getUser);
 router.post('/:id/borrow/:bookId', controller.borrowBook);
+router.post('/:id/return/:bookId', controller.returnBook);
 
 module.exports = router;
