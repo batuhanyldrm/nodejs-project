@@ -8,18 +8,40 @@ const getUsers =  (req, res) => {
     })
 }
 
-const getUser =  (req, res) => {
-    const id = parseInt(req.params.id)
-    pool.query(`SELECT 
-    id,
-    name,
-    book_history books
-     FROM users WHERE id = ${id}`,
-    (error, result) => {
-        if (error) throw error;
-        res.status(200).json(result.rows);
-    })
-}
+const getUser = (req, res) => {
+    const id = parseInt(req.params.id);
+    pool.query(
+        `SELECT 
+        u.id,
+        u.name,
+        jsonb_build_object(
+            'past', jsonb_agg(jsonb_build_object('name', b.name, 'userScore', bh.score)) FILTER (WHERE bh.status = 0),
+            'present', jsonb_agg(jsonb_build_object('name', b.name)) FILTER (WHERE bh.status = 1)
+        ) AS books
+        FROM 
+            users u
+        LEFT JOIN 
+            book_history bh ON u.id = bh.user_id
+        LEFT JOIN 
+            books b ON bh.book_id = b.id
+        WHERE 
+            u.id = $1
+        GROUP BY 
+            u.id, u.name`,
+        [id],
+        (error, result) => {
+            if (error) {
+                console.error('Something Went Wrong:', error);
+                res.status(500).send('Something Went Wrong');
+            }
+            if (result.rows.length > 0) {
+                result.rows[0].books.past = result.rows[0].books.past == null ? [] : result.rows[0].books.past
+                result.rows[0].books.present = result.rows[0].books.present == null ? [] : result.rows[0].books.present
+                res.status(200).json(result.rows);   
+            }
+        }
+    );
+};
 
 const addUser =  (req, res) => {
     const { name } = req.body
