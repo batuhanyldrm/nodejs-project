@@ -3,8 +3,7 @@ const pool = require('../../repository')
 const getBooks =  (req, res) => {
     pool.query(`SELECT
      id,
-     name,
-     average_score score
+     name
      FROM books`,
     (error, result) => {
         if (error) throw error;

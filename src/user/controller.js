@@ -10,7 +10,11 @@ const getUsers =  (req, res) => {
 
 const getUser =  (req, res) => {
     const id = parseInt(req.params.id)
-    pool.query(`SELECT * FROM users WHERE id = ${id}`,
+    pool.query(`SELECT 
+    id,
+    name,
+    book_history books
+     FROM users WHERE id = ${id}`,
     (error, result) => {
         if (error) throw error;
         res.status(200).json(result.rows);
@@ -38,12 +42,11 @@ const borrowBook =  (req, res) => {
 
     const checkUserQuery = 'SELECT 1 FROM users WHERE id = $1';
     const checkBookQuery = 'SELECT 1 FROM books WHERE id = $1';
-    const checkBookHistoryQuery = 'SELECT 1 FROM book_history WHERE status = $1';
+    const checkBookHistoryQuery = 'SELECT 1 FROM book_history WHERE book_id = $1 AND status = $2';
     const insertBookHistoryQuery = 'INSERT INTO book_history (book_id, user_id, status) VALUES ($1, $2, $3)';
 
     pool.query(checkUserQuery, [id], (error, result) => {
         if (error) {
-            console.error("Error occurred while checking user:", error);
             return res.status(500).send('Something Went Wrong');
         }
 
@@ -51,31 +54,26 @@ const borrowBook =  (req, res) => {
             return res.status(404).send('User not found');
         }
 
-        pool.query(checkBookHistoryQuery, [1], (error, result) => {
+        pool.query(checkBookQuery, [bookId], (error, result) => {
             if (error) {
-                console.error("Error occurred while checking user:", error);
                 return res.status(500).send('Something Went Wrong');
             }
-    
-            for (let i = 0; i < result.rows.length; i++) {
-                if (result.rows[i].status === 1) {
-                    return res.status(404).send('Book already borrowed');
-                }
+
+            if (result.rowCount === 0) {
+                return res.status(404).send('Book not found');
             }
 
-            pool.query(checkBookQuery, [bookId], (error, result) => {
+            pool.query(checkBookHistoryQuery, [bookId, 1], (error, result) => {
                 if (error) {
-                    console.error("Error occurred while checking book:", error);
                     return res.status(500).send('Something Went Wrong');
                 }
 
-                if (result.rowCount === 0) {
-                    return res.status(404).send('Book not found');
+                if (result.rowCount > 0) {
+                    return res.status(400).send('Book already borrowed');
                 }
 
                 pool.query(insertBookHistoryQuery, [bookId, id, 1], (error, result) => {
                     if (error) {
-                        console.error("Error occurred while adding borrow book:", error);
                         return res.status(500).send('Something Went Wrong');
                     }
                     res.status(201).send('Borrow book Successfully Created.');
@@ -86,23 +84,52 @@ const borrowBook =  (req, res) => {
     });
 }
 
-const returnBook =  (req, res) => {
-    const id = parseInt(req.params.id)
+const returnBook = (req, res) => {
+    const id = parseInt(req.params.id);
     const bookId = parseInt(req.params.bookId);
-    const { score } = req.body
+    const { score } = req.body;
 
+    if (isNaN(id) || isNaN(bookId) || isNaN(score)) {
+        res.status(400).send('Invalid parameters provided');
+        return;
+    }
+
+    const checkBookStatusQuery = 'SELECT status FROM book_history WHERE book_id = $1 AND user_id = $2 AND status = $3 ORDER BY id';
     const insertBookHistoryQuery = 'UPDATE book_history SET score = $1, status = $2 WHERE book_id = $3 AND user_id = $4';
-    const values = [score, null, bookId, id];
-    pool.query(insertBookHistoryQuery, values,
-    (error, result) => {
+    const statusValues = [bookId, id, 1];
+    const updateValues = [score, 0, bookId, id];
+
+    pool.query(checkBookStatusQuery, statusValues, (error, result) => {
         if (error) {
-            console.error("Error occurred while adding user:", error);
+            console.error("Error occurred while checking book status:", error);
             res.status(500).send('Something Went Wrong');
+        } else {
+            if (result.rows.length === 0) {
+                res.status(404).send('Book or User not found.');
+            } else {
+                const status = result.rows[0].status;
+                if (status !== 1) {
+                    res.status(400).send('This book is in the library, you cannot enter score.');
+                } else {
+                    pool.query(insertBookHistoryQuery, updateValues, (error, result) => {
+                        if (error) {
+                            console.error("Error occurred while updating book history:", error);
+                            res.status(500).send('Something Went Wrong');
+                        } else {
+                            if (result.rowCount > 0) {
+                                res.status(201).send('Book Delivered.');
+                                console.log("Book Delivered");
+                            } else {
+                                res.status(404).send('Book or User not found.');
+                            }
+                        }
+                    });
+                }
+            }
         }
-        res.status(201).send('Book Delivered.');
-        console.log("Book Delivered")
-    })
-}
+    });
+};
+
 
 module.exports = {
     getUsers,
